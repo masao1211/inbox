@@ -1,299 +1,304 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>特別気配 自動計算ツール（自動計算・上下1表・+0:00・下限1円）</title>
-</head>
-<body>
-  <h1>特別気配 自動計算ツール（自動計算・上下1表）</h1>
-  <p>基準値段（前日終値または最終気配値）を入力すると自動計算します。初回更新は +0:00 に表示します。</p>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>特別気配自動計算ツール</title>
+  </head>
+  <body>
+    <h1>
+      特別気配自動計算ツール
+      <span id="nictTime"
+            style="font-size:0.6em;font-weight:normal;margin-left:1em;white-space:nowrap;">
+        現在時刻取得中...
+      </span>
+    </h1>
+    <p>基準値段（前日終値または最終気配値）を入力してください。</p>
 
-  <div>
-    <label>
-      基準値段（円）:
-      <input type="number" id="basePrice" step="1">
-    </label>
-  </div>
+    <div>
+      <label>
+        基準値段（円）:
+        <input type="number" id="basePrice" step="1">
+      </label>
+    </div>
 
-  <div id="info"></div>
-  <div id="result"></div>
+    <div id="info"></div>
+    <div id="result"></div>
 
-  <script>
-    // --- 特別気配の更新値幅テーブル（通常時・簡易） ---
-    const specialWidths = [
-      { limit: 200, width: 5 },
-      { limit: 500, width: 8 },
-      { limit: 700, width: 10 },
-      { limit: 1000, width: 15 },
-      { limit: 1500, width: 30 },
-      { limit: 2000, width: 40 },
-      { limit: 3000, width: 50 },
-      { limit: 5000, width: 70 },
-      { limit: 7000, width: 100 },
-      { limit: 10000, width: 150 },
-      { limit: 15000, width: 300 },
-      { limit: 20000, width: 400 },
-      { limit: 30000, width: 500 },
-      { limit: 50000, width: 700 },
-      { limit: 70000, width: 1000 },
-      { limit: 100000, width: 1500 },
-      { limit: 150000, width: 3000 },
-      { limit: 200000, width: 4000 },
-      { limit: 300000, width: 5000 },
-      { limit: 500000, width: 7000 },
-      { limit: 700000, width: 10000 },
-      { limit: 1000000, width: 15000 },
-      { limit: 1500000, width: 30000 },
-      { limit: 2000000, width: 40000 },
-      { limit: 3000000, width: 50000 },
-      { limit: 5000000, width: 70000 },
-      { limit: 7000000, width: 100000 },
-      { limit: 10000000, width: 150000 },
-      { limit: 15000000, width: 300000 },
-      { limit: 20000000, width: 400000 },
-      { limit: 30000000, width: 500000 },
-      { limit: 50000000, width: 700000 },
-      { limit: Infinity, width: 1000000 }
-    ];
+    <script>
+      // --- 特別気配の更新値幅テーブル（通常時・簡易） ---
+      const specialWidths = [
+        { limit: 200, width: 5 },
+        { limit: 500, width: 8 },
+        { limit: 700, width: 10 },
+        { limit: 1000, width: 15 },
+        { limit: 1500, width: 30 },
+        { limit: 2000, width: 40 },
+        { limit: 3000, width: 50 },
+        { limit: 5000, width: 70 },
+        { limit: 7000, width: 100 },
+        { limit: 10000, width: 150 },
+        { limit: 15000, width: 300 },
+        { limit: 20000, width: 400 },
+        { limit: 30000, width: 500 },
+        { limit: 50000, width: 700 },
+        { limit: 70000, width: 1000 },
+        { limit: 100000, width: 1500 },
+        { limit: 150000, width: 3000 },
+        { limit: 200000, width: 4000 },
+        { limit: 300000, width: 5000 },
+        { limit: 500000, width: 7000 },
+        { limit: 700000, width: 10000 },
+        { limit: 1000000, width: 15000 },
+        { limit: 1500000, width: 30000 },
+        { limit: 2000000, width: 40000 },
+        { limit: 3000000, width: 50000 },
+        { limit: 5000000, width: 70000 },
+        { limit: Infinity, width: 100000 }
+      ];
 
-    // --- 制限値幅テーブル（通常時・簡易） ---
-    const limitWidths = [
-      { limit: 100, width: 30 },
-      { limit: 200, width: 50 },
-      { limit: 500, width: 80 },
-      { limit: 700, width: 100 },
-      { limit: 1000, width: 150 },
-      { limit: 1500, width: 300 },
-      { limit: 2000, width: 400 },
-      { limit: 3000, width: 500 },
-      { limit: 5000, width: 700 },
-      { limit: 7000, width: 1000 },
-      { limit: 10000, width: 1500 },
-      { limit: 15000, width: 3000 },
-      { limit: 20000, width: 4000 },
-      { limit: 30000, width: 5000 },
-      { limit: 50000, width: 7000 },
-      { limit: 70000, width: 10000 },
-      { limit: 100000, width: 15000 },
-      { limit: 150000, width: 30000 },
-      { limit: 200000, width: 40000 },
-      { limit: 300000, width: 50000 },
-      { limit: 500000, width: 70000 },
-      { limit: 700000, width: 100000 },
-      { limit: 1000000, width: 150000 },
-      { limit: 1500000, width: 300000 },
-      { limit: 2000000, width: 400000 },
-      { limit: 3000000, width: 500000 },
-      { limit: 5000000, width: 700000 },
-      { limit: 7000000, width: 1000000 },
-      { limit: 10000000, width: 1500000 },
-      { limit: 15000000, width: 3000000 },
-      { limit: 20000000, width: 4000000 },
-      { limit: 30000000, width: 5000000 },
-      { limit: 50000000, width: 7000000 },
-      { limit: Infinity, width: 10000000 }
-    ];
+      // --- 制限値幅テーブル（通常時・簡易） ---
+      const limitWidths = [
+        { limit: 100, width: 30 },
+        { limit: 200, width: 50 },
+        { limit: 500, width: 80 },
+        { limit: 700, width: 100 },
+        { limit: 1000, width: 150 },
+        { limit: 1500, width: 300 },
+        { limit: 2000, width: 400 },
+        { limit: 3000, width: 500 },
+        { limit: 5000, width: 700 },
+        { limit: 7000, width: 1000 },
+        { limit: 10000, width: 1500 },
+        { limit: 15000, width: 3000 },
+        { limit: 20000, width: 4000 },
+        { limit: 30000, width: 5000 },
+        { limit: 50000, width: 7000 },
+        { limit: 70000, width: 10000 },
+        { limit: 100000, width: 15000 },
+        { limit: 150000, width: 30000 },
+        { limit: 200000, width: 40000 },
+        { limit: 300000, width: 50000 },
+        { limit: 500000, width: 70000 },
+        { limit: 700000, width: 100000 },
+        { limit: 1000000, width: 150000 },
+        { limit: 1500000, width: 300000 },
+        { limit: 2000000, width: 400000 },
+        { limit: 3000000, width: 500000 },
+        { limit: 5000000, width: 700000 },
+        { limit: Infinity, width: 1000000 }
+      ];
 
-    function getSpecialWidth(price) {
-      for (var i = 0; i < specialWidths.length; i++) {
-        if (price < specialWidths[i].limit) {
-          return specialWidths[i].width;
-        }
-      }
-      return null;
-    }
-
-    function getLimitWidth(basePrice) {
-      for (var i = 0; i < limitWidths.length; i++) {
-        if (basePrice < limitWidths[i].limit) {
-          return limitWidths[i].width;
-        }
-      }
-      return null;
-    }
-
-    function formatTime(totalMinutes) {
-      var h = Math.floor(totalMinutes / 60);
-      var m = totalMinutes % 60;
-      var mm = (m < 10 ? "0" + m : "" + m);
-      return h + ":" + mm;
-    }
-
-    function formatYen(v) {
-      return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "円";
-    }
-
-    // 上昇方向：+0:00 から開始、最終はストップ高ちょうど（超える場合は調整）
-    function calcUpward(basePrice, limitUp) {
-      var rows = [];
-      var current = basePrice;
-      var minutes = 0;
-      var maxSteps = 1000;
-
-      while (maxSteps-- > 0) {
-        var step = getSpecialWidth(current);
-        if (!step) break;
-
-        var next = current + step;
-
-        if (next > limitUp) {
-          if (current < limitUp) {
-            rows.push({
-              time: "+" + formatTime(minutes),
-              price: limitUp,
-              step: limitUp - current
-            });
+      function getSpecialWidth(price) {
+        for (var i = 0; i < specialWidths.length; i++) {
+          if (price < specialWidths[i].limit) {
+            return specialWidths[i].width;
           }
-          break;
         }
-
-        rows.push({
-          time: "+" + formatTime(minutes),
-          price: next,
-          step: step
-        });
-        current = next;
-
-        if (current === limitUp) {
-          break;
-        }
-
-        minutes += 3;
+        return null;
       }
 
-      return rows;
-    }
-
-    // 下落方向：+0:00 から開始、1円未満は出さない（0円以下NG）、最終は有効下限ちょうど
-    function calcDownward(basePrice, limitDownEffective) {
-      var rows = [];
-      var current = basePrice;
-      var minutes = 0;
-      var maxSteps = 1000;
-
-      while (maxSteps-- > 0) {
-        var step = getSpecialWidth(current);
-        if (!step) break;
-
-        var next = current - step;
-
-        // 次で有効下限(>=1円)を割り込む場合は、ちょうどまでを最終行
-        if (next < limitDownEffective) {
-          if (current > limitDownEffective) {
-            rows.push({
-              time: "+" + formatTime(minutes),
-              price: limitDownEffective,
-              step: current - limitDownEffective
-            });
+      function getLimitWidth(basePrice) {
+        for (var i = 0; i < limitWidths.length; i++) {
+          if (basePrice < limitWidths[i].limit) {
+            return limitWidths[i].width;
           }
-          break;
         }
-
-        // 0円以下にはしない
-        if (next <= 0) {
-          break;
-        }
-
-        rows.push({
-          time: "+" + formatTime(minutes),
-          price: next,
-          step: step
-        });
-        current = next;
-
-        // 有効下限到達または1円到達で終了
-        if (current === limitDownEffective || current === 1) {
-          break;
-        }
-
-        minutes += 3;
+        return null;
       }
 
-      return rows;
-    }
-
-    // 上下まとめて1表にする（更新値幅も併記）
-    function buildCombinedTable(upRows, downRows) {
-      var maxLen = Math.max(upRows.length, downRows.length);
-      if (maxLen === 0) {
-        return "<p>該当する更新ステップはありません。</p>";
+      function formatTime(totalMinutes) {
+        var h = Math.floor(totalMinutes / 60);
+        var m = totalMinutes % 60;
+        var mm = (m < 10 ? "0" + m : "" + m);
+        return h + ":" + mm;
       }
 
-      var html = "";
-      html += "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">";
-      html += "<tr><th>経過時間</th><th>上昇方向 特別気配値（更新値幅）</th><th>下落方向 特別気配値（更新値幅）</th></tr>";
+      function formatYen(v) {
+        return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "円";
+      }
 
-      for (var i = 0; i < maxLen; i++) {
-        var up = upRows[i];
-        var down = downRows[i];
+      // 上昇方向：+0:00 から開始、最終はストップ高ちょうど（超える場合は調整）
+      function calcUpward(basePrice, limitUp) {
+        var rows = [];
+        var current = basePrice;
+        var minutes = 0;
+        var maxSteps = 1000;
 
-        var timeText = "";
-        if (up && up.time) {
-          timeText = up.time;
-        } else if (down && down.time) {
-          timeText = down.time;
+        while (maxSteps-- > 0) {
+          var step = getSpecialWidth(current);
+          if (!step) break;
+
+          var next = current + step;
+
+          // 次がストップ高を超える場合はストップ高で止める
+          if (next >= limitUp) {
+            if (current < limitUp) {
+              rows.push({
+                time: "+" + formatTime(minutes),
+                price: limitUp,
+                step: limitUp - current
+              });
+            }
+            break;
+          }
+
+          rows.push({
+            time: "+" + formatTime(minutes),
+            price: next,
+            step: step
+          });
+
+          current = next;
+          minutes += 3;
+        }
+
+        return rows;
+      }
+
+      // 下落方向：+0:00 から開始、最終はストップ安ちょうど（超える場合は調整）
+      function calcDownward(basePrice, limitDown) {
+        var rows = [];
+        var current = basePrice;
+        var minutes = 0;
+        var maxSteps = 1000;
+
+        while (maxSteps-- > 0) {
+          var step = getSpecialWidth(current);
+          if (!step) break;
+
+          var next = current - step;
+
+          // 次がストップ安を下回る場合はストップ安で止める
+          if (next <= limitDown) {
+            if (current > limitDown) {
+              rows.push({
+                time: "+" + formatTime(minutes),
+                price: limitDown,
+                step: current - limitDown
+              });
+            }
+            break;
+          }
+
+          rows.push({
+            time: "+" + formatTime(minutes),
+            price: next,
+            step: step
+          });
+
+          current = next;
+          minutes += 3;
+        }
+
+        return rows;
+      }
+
+      function buildCombinedTable(upRows, downRows) {
+        var maxLen = Math.max(upRows.length, downRows.length);
+        if (maxLen === 0) {
+          return "<p>該当する更新ステップはありません。</p>";
+        }
+
+        var html = "";
+        html += "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">";
+        html += "<tr><th>経過時間</th><th>上昇方向 特別気配値（更新値幅）</th><th>下落方向 特別気配値（更新値幅）</th></tr>";
+
+        for (var i = 0; i < maxLen; i++) {
+          var up = upRows[i];
+          var down = downRows[i];
+
+          var timeText = "";
+          if (up && down) {
+            timeText = up.time; // 双方同じはず
+          } else if (up) {
+            timeText = up.time;
+          } else if (down) {
+            timeText = down.time;
+          }
+
+          var upText = up
+            ? formatYen(up.price) + "（+" + up.step + "）"
+            : "";
+          var downText = down
+            ? formatYen(down.price) + "（-" + down.step + "）"
+            : "";
+
+          html += "<tr><td>" + timeText + "</td><td>" + upText + "</td><td>" + downText + "</td></tr>";
+        }
+
+        html += "</table>";
+        return html;
+      }
+
+      function calculate() {
+        var baseInput = document.getElementById("basePrice").value;
+        var infoDiv = document.getElementById("info");
+        var resultDiv = document.getElementById("result");
+
+        infoDiv.innerHTML = "";
+        resultDiv.innerHTML = "";
+
+        var basePrice = parseFloat(baseInput);
+        if (isNaN(basePrice) || basePrice <= 0) {
+          return; // 未入力時は何も表示しない
+        }
+
+        var limitWidth = getLimitWidth(basePrice);
+        if (!limitWidth) {
+          infoDiv.innerHTML = "<p>この基準値段に対応する制限値幅が見つかりません。</p>";
+          return;
+        }
+
+        var limitUp = basePrice + limitWidth;
+        var limitDown = basePrice - limitWidth;
+
+        infoDiv.innerHTML =
+          "<p>基準値段: " +
+          formatYen(basePrice) +
+          "　制限値幅: ±" +
+          formatYen(limitWidth) +
+          "</p>" +
+          "<p>ストップ高: " +
+          formatYen(limitUp) +
+          " / ストップ安: " +
+          formatYen(limitDown) +
+          "</p>" +
+          "<p>※JPX公表の通常時テーブルに基づく簡易計算です。<br>　臨時措置や個別銘柄の例外は考慮していません。<br></p>";
+
+        var upRows = calcUpward(basePrice, limitUp);
+        var downRows = calcDownward(basePrice, limitDown);
+
+        resultDiv.innerHTML = buildCombinedTable(upRows, downRows);
+      }
+
+      // 入力のたびに自動計算
+      document.getElementById("basePrice").addEventListener("input", calculate);
+    </script>
+
+    <!-- PCの現在時刻表示スクリプト -->
+    <script>
+      (function () {
+        var timeSpan = document.getElementById("nictTime");
+        if (!timeSpan) return;
+
+        function updateClock() {
+          var now = new Date(); // PC（ブラウザ）ローカル時刻
+          var hh = String(now.getHours()).padStart(2, "0");
+          var mm = String(now.getMinutes()).padStart(2, "0");
+          var ss = String(now.getSeconds()).padStart(2, "0");
+          timeSpan.textContent = "現在時刻(PC): " + hh + ":" + mm + ":" + ss;
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", function () {
+            updateClock();
+            setInterval(updateClock, 1000);
+          });
         } else {
-          var minutesFallback = i * 3;
-          timeText = "+" + formatTime(minutesFallback);
+          updateClock();
+          setInterval(updateClock, 1000);
         }
-
-        var upText = "";
-        if (up) {
-          upText = formatYen(up.price) + "（+" + up.step + "）";
-        }
-
-        var downText = "";
-        if (down) {
-          downText = formatYen(down.price) + "（-" + down.step + "）";
-        }
-
-        html += "<tr><td>" + timeText + "</td><td>" + upText + "</td><td>" + downText + "</td></tr>";
-      }
-
-      html += "</table>";
-      return html;
-    }
-
-    function calculate() {
-      var baseInput = document.getElementById("basePrice").value;
-      var infoDiv = document.getElementById("info");
-      var resultDiv = document.getElementById("result");
-
-      infoDiv.innerHTML = "";
-      resultDiv.innerHTML = "";
-
-      var basePrice = parseFloat(baseInput);
-      if (isNaN(basePrice) || basePrice <= 0) {
-        return; // 未入力時は何も表示しない
-      }
-
-      var limitWidth = getLimitWidth(basePrice);
-      if (!limitWidth) {
-        infoDiv.innerHTML = "<p>この基準値段に対応する制限値幅が見つかりません。</p>";
-        return;
-      }
-
-      var limitUp = basePrice + limitWidth;
-      var limitDownRaw = basePrice - limitWidth;
-      // 表示・計算上の有効下限は 1円以上（0円以下は禁止）
-      var limitDownEffective = Math.max(1, limitDownRaw);
-
-      var infoHtml = "";
-      infoHtml += "<p>基準値段: " + formatYen(basePrice) + "</p>";
-      infoHtml += "<p>制限値幅（通常）：上下 " + formatYen(limitWidth) + "</p>";
-      infoHtml += "<p>上限値段（ストップ高想定）: " + formatYen(limitUp) +
-                  " ／ 下限値段（ストップ安想定・1円未満切上げ）: " + formatYen(limitDownEffective) + "</p>";
-      infoHtml += "<p>※JPX公表の通常時テーブルを元にした簡易計算です。臨時措置や個別銘柄の例外は考慮していません。</p>";
-      infoDiv.innerHTML = infoHtml;
-
-      var upRows = calcUpward(basePrice, limitUp);
-      var downRows = calcDownward(basePrice, limitDownEffective);
-
-      resultDiv.innerHTML = buildCombinedTable(upRows, downRows);
-    }
-
-    // 入力のたびに自動計算
-    document.getElementById("basePrice").addEventListener("input", calculate);
-  </script>
-</body>
+      })();
+    </script>
+  </body>
 </html>
