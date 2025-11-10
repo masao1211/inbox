@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>特別気配 自動計算ツール（上下1表・簡易版）</title>
+</head>
+<body>
+  <h1>特別気配 自動計算ツール（上下1表・簡易版）</h1>
+  <p>基準値段（前日終値または最終気配値）を入力し、「計算」を押してください。</p>
+
+  <div>
+    <label>
+      基準値段（円）:
+      <input type="number" id="basePrice" step="1">
+    </label>
+  </div>
+  <div>
+    <button type="button" onclick="calculate()">計算</button>
+  </div>
+
+  <div id="info"></div>
+  <div id="result"></div>
+
+  <script>
+    // --- 特別気配の更新値幅テーブル（05.html 準拠・通常時） ---
+    const specialWidths = [
+      { limit: 200, width: 5 },
+      { limit: 500, width: 8 },
+      { limit: 700, width: 10 },
+      { limit: 1000, width: 15 },
+      { limit: 1500, width: 30 },
+      { limit: 2000, width: 40 },
+      { limit: 3000, width: 50 },
+      { limit: 5000, width: 70 },
+      { limit: 7000, width: 100 },
+      { limit: 10000, width: 150 },
+      { limit: 15000, width: 300 },
+      { limit: 20000, width: 400 },
+      { limit: 30000, width: 500 },
+      { limit: 50000, width: 700 },
+      { limit: 70000, width: 1000 },
+      { limit: 100000, width: 1500 },
+      { limit: 150000, width: 3000 },
+      { limit: 200000, width: 4000 },
+      { limit: 300000, width: 5000 },
+      { limit: 500000, width: 7000 },
+      { limit: 700000, width: 10000 },
+      { limit: 1000000, width: 15000 },
+      { limit: 1500000, width: 30000 },
+      { limit: 2000000, width: 40000 },
+      { limit: 3000000, width: 50000 },
+      { limit: 5000000, width: 70000 },
+      { limit: 7000000, width: 100000 },
+      { limit: 10000000, width: 150000 },
+      { limit: 15000000, width: 300000 },
+      { limit: 20000000, width: 400000 },
+      { limit: 30000000, width: 500000 },
+      { limit: 50000000, width: 700000 },
+      { limit: Infinity, width: 1000000 }
+    ];
+
+    // --- 制限値幅テーブル（06.html 準拠・通常時） ---
+    const limitWidths = [
+      { limit: 100, width: 30 },
+      { limit: 200, width: 50 },
+      { limit: 500, width: 80 },
+      { limit: 700, width: 100 },
+      { limit: 1000, width: 150 },
+      { limit: 1500, width: 300 },
+      { limit: 2000, width: 400 },
+      { limit: 3000, width: 500 },
+      { limit: 5000, width: 700 },
+      { limit: 7000, width: 1000 },
+      { limit: 10000, width: 1500 },
+      { limit: 15000, width: 3000 },
+      { limit: 20000, width: 4000 },
+      { limit: 30000, width: 5000 },
+      { limit: 50000, width: 7000 },
+      { limit: 70000, width: 10000 },
+      { limit: 100000, width: 15000 },
+      { limit: 150000, width: 30000 },
+      { limit: 200000, width: 40000 },
+      { limit: 300000, width: 50000 },
+      { limit: 500000, width: 70000 },
+      { limit: 700000, width: 100000 },
+      { limit: 1000000, width: 150000 },
+      { limit: 1500000, width: 300000 },
+      { limit: 2000000, width: 400000 },
+      { limit: 3000000, width: 500000 },
+      { limit: 5000000, width: 700000 },
+      { limit: 7000000, width: 1000000 },
+      { limit: 10000000, width: 1500000 },
+      { limit: 15000000, width: 3000000 },
+      { limit: 20000000, width: 4000000 },
+      { limit: 30000000, width: 5000000 },
+      { limit: 50000000, width: 7000000 },
+      { limit: Infinity, width: 10000000 }
+    ];
+
+    function getSpecialWidth(price) {
+      for (var i = 0; i < specialWidths.length; i++) {
+        if (price < specialWidths[i].limit) {
+          return specialWidths[i].width;
+        }
+      }
+      return null;
+    }
+
+    function getLimitWidth(basePrice) {
+      for (var i = 0; i < limitWidths.length; i++) {
+        if (basePrice < limitWidths[i].limit) {
+          return limitWidths[i].width;
+        }
+      }
+      return null;
+    }
+
+    function formatTime(totalMinutes) {
+      var h = Math.floor(totalMinutes / 60);
+      var m = totalMinutes % 60;
+      var mm = (m < 10 ? "0" + m : "" + m);
+      return h + ":" + mm;
+    }
+
+    function formatYen(v) {
+      return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "円";
+    }
+
+    // 上昇方向（ストップ高ちょうどを最終行として拾う）
+    function calcUpward(basePrice, limitUp) {
+      var rows = [];
+      var current = basePrice;
+      var minutes = 0;
+      var maxSteps = 1000;
+
+      while (maxSteps-- > 0) {
+        var step = getSpecialWidth(current);
+        if (!step) break;
+
+        var next = current + step;
+
+        if (next > limitUp) {
+          if (current < limitUp) {
+            minutes += 3;
+            rows.push({
+              time: "+" + formatTime(minutes),
+              price: limitUp
+            });
+          }
+          break;
+        }
+
+        minutes += 3;
+        rows.push({
+          time: "+" + formatTime(minutes),
+          price: next
+        });
+        current = next;
+
+        if (current === limitUp) break;
+      }
+
+      return rows;
+    }
+
+    // 下落方向（ストップ安ちょうどを最終行として拾う）
+    function calcDownward(basePrice, limitDown) {
+      var rows = [];
+      var current = basePrice;
+      var minutes = 0;
+      var maxSteps = 1000;
+
+      while (maxSteps-- > 0) {
+        var step = getSpecialWidth(current);
+        if (!step) break;
+
+        var next = current - step;
+
+        if (next < limitDown) {
+          if (current > limitDown) {
+            minutes += 3;
+            rows.push({
+              time: "+" + formatTime(minutes),
+              price: limitDown
+            });
+          }
+          break;
+        }
+
+        minutes += 3;
+        rows.push({
+          time: "+" + formatTime(minutes),
+          price: next
+        });
+        current = next;
+
+        if (current === limitDown) break;
+      }
+
+      return rows;
+    }
+
+    // 上下まとめて1表にする
+    function buildCombinedTable(upRows, downRows) {
+      var maxLen = Math.max(upRows.length, downRows.length);
+      if (maxLen === 0) {
+        return "<p>該当する更新ステップはありません。</p>";
+      }
+
+      var html = "";
+      html += "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">";
+      html += "<tr><th>経過時間</th><th>上昇方向 特別気配値</th><th>下落方向 特別気配値</th></tr>";
+
+      for (var i = 0; i < maxLen; i++) {
+        var up = upRows[i];
+        var down = downRows[i];
+
+        // 行の時間表示：
+        // どちらかにデータがあればそのtime、両方あれば同じはずなので上のを採用
+        var timeText = "";
+        if (up && up.time) {
+          timeText = up.time;
+        } else if (down && down.time) {
+          timeText = down.time;
+        } else {
+          // 念のため（通常ここには来ない）
+          var minutes = (i + 1) * 3;
+          timeText = "+" + formatTime(minutes);
+        }
+
+        var upText = up ? formatYen(up.price) : "";
+        var downText = down ? formatYen(down.price) : "";
+
+        html += "<tr><td>" + timeText + "</td><td>" + upText + "</td><td>" + downText + "</td></tr>";
+      }
+
+      html += "</table>";
+      return html;
+    }
+
+    function calculate() {
+      var baseInput = document.getElementById("basePrice").value;
+      var infoDiv = document.getElementById("info");
+      var resultDiv = document.getElementById("result");
+
+      infoDiv.innerHTML = "";
+      resultDiv.innerHTML = "";
+
+      var basePrice = parseFloat(baseInput);
+
+      if (isNaN(basePrice) || basePrice <= 0) {
+        infoDiv.innerHTML = "<p>基準値段を正しく入力してください。</p>";
+        return;
+      }
+
+      var limitWidth = getLimitWidth(basePrice);
+      if (!limitWidth) {
+        infoDiv.innerHTML = "<p>この基準値段に対応する制限値幅が見つかりません。</p>";
+        return;
+      }
+
+      var limitUp = basePrice + limitWidth;
+      var limitDown = basePrice - limitWidth;
+
+      var infoHtml = "";
+      infoHtml += "<p>基準値段: " + formatYen(basePrice) + "</p>";
+      infoHtml += "<p>制限値幅（通常）：上下 " + formatYen(limitWidth) + "</p>";
+      infoHtml += "<p>上限値段（ストップ高）: " + formatYen(limitUp) +
+                  " ／ 下限値段（ストップ安）: " + formatYen(limitDown) + "</p>";
+      infoHtml += "<p>※JPX公表の通常時テーブルに基づく簡易計算です。臨時拡大・縮小や個別銘柄の例外は考慮していません。</p>";
+      infoDiv.innerHTML = infoHtml;
+
+      var upRows = calcUpward(basePrice, limitUp);
+      var downRows = calcDownward(basePrice, limitDown);
+
+      resultDiv.innerHTML = buildCombinedTable(upRows, downRows);
+    }
+  </script>
+</body>
+</html>
